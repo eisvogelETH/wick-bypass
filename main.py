@@ -26,9 +26,9 @@ text = '''
 
 print(Colorate.Diagonal(Colors.blue_to_purple, Center.XCenter(text)))
 
-channel_id = '1095065811401584664' #input('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'insert the channel id:')
-guild_id = '1095065810483028051'#input('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'insert the guild id:')
-button_id = '1185266006566912032'#input('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'insert the button id:')
+channel_id = input('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'insert the channel id:')
+guild_id = input('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'insert the guild id:')
+button_id = input('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'insert the button id:')
 
 failed = 0
 bypassed = 0

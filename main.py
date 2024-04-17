@@ -1,4 +1,5 @@
-#thanks to https://github.com/imAETHER/AI-CaptchaSolver for his model
+#thanks to https://github.com/imAETHER/AI-CaptchaSolver for his model and thanks to https://github.com/0verp0wer/wick-bypass for providing the code that i slightly adjusted to my needs
+
 
 import os
 import re
@@ -25,10 +26,10 @@ text = '''
 ╚╩╝╩╚═╝╩ ╩  ╚  ╚═╝╚═╝╩ ╩╚═╝╩╚═'''
 
 print(Colorate.Diagonal(Colors.blue_to_purple, Center.XCenter(text)))
-
-channel_id = input('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'insert the channel id:')
-guild_id = input('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'insert the guild id:')
-button_id = input('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'insert the button id:')
+#currently setup for random project using the wickbot
+channel_id = '1095065811401584664' #input('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'insert the channel id:')
+guild_id = '1095065810483028051'#input('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'insert the guild id:')
+button_id = '1185266006566912032'#input('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'insert the button id:')
 
 failed = 0
 bypassed = 0
@@ -116,32 +117,70 @@ def solveCaptcha(url, color = "fcc434") -> str:
   for _, key in a.name.items():
     result = result + key
   return result
-
+ 
+    
 with open("tokens.txt", "r") as f:
   tokens = f.readlines()
   for i in tokens:
     token = i.rstrip()
 
     System.Title(f"Wick Fucker by over_on_top - {bypassed} verification bypassed - {failed} verification failed")
-
+    
     authorization = {
       'Authorization': token
     }
-
-    r = requests.get("https://discord.com/api/v9/users/@me", headers=authorization).json()
-    token_id = r["id"]
-
-    r = requests.get(f'https://discord.com/api/v9/channels/{channel_id}/messages?limit=50', headers=authorization)
-    response = r.content
-
-    match = re.search(r'"custom_id": "([^"]+)"', str(response))
-    if match:
-      custom_id = match.group(1)
     
-    match2 = re.search(r'"author": {"id": "([^"]{18})"', str(response))
-    if match2:
-      application_id = match2.group(1)
+    json_object = {
+        "authorization": {
+            "Authorization": token 
+        },
+        "requests": [
+            {
+                "url": "https://discord.com/api/v9/users/@me",
+                "method": "GET",
+                "headers": "authorization",
+                "responseKey": "id"
+            },
+            {
+                "url": "https://discord.com/api/v9/channels/{channel_id}/messages?limit=50",
+                "method": "GET",
+                "headers": "authorization"
+            }
+        ],
+        "customIdRegex": {
+            "pattern": '"custom_id": "([^"]+)"',
+            "groupIndex": 1
+        },
+        "applicationIdRegex": {
+            "pattern": '"author": {"id": "([^"]{18})"',
+            "groupIndex": 1
+        }
+    }
+    user_response = requests.get(json_object["requests"][0]["url"], headers=json_object["authorization"]).json()
+    token_id = user_response[json_object["requests"][0]["responseKey"]]
     
+    # Make the second request to get the messages
+    message_response = requests.get(json_object["requests"][1]["url"].format(channel_id=channel_id), headers=json_object["authorization"])
+    response_content = message_response.json()
+
+    application_ids = []
+    for message in response_content:
+        application_id = message.get("author", {}).get("id")
+        if application_id:
+            application_ids.append(application_id)
+    
+    
+    # Extract custom_id where label is "Verify"
+    custom_ids = []
+    for message in response_content:
+        if isinstance(message, dict):
+            components = message.get("components", [])
+            for component in components:
+                sub_components = component.get("components", [])
+                for sub_component in sub_components:
+                    if sub_component.get("label") == "Verify":
+                        custom_id = sub_component.get("custom_id")
+                        custom_ids.append(custom_id)   
     headers = {
       'Accept': '*/*',
       'Accept-Encoding': 'gzip, deflate, br',
@@ -169,9 +208,24 @@ with open("tokens.txt", "r") as f:
 
     ws = websocket.WebSocket()
     connect(ws)
-    r = requests.post("https://discord.com/api/v9/interactions", headers=headers, json={"type":3,"nonce":"".join([str(random.randint(1, 9)) for _ in range(19)]),"guild_id":guild_id,"channel_id":channel_id,"message_flags":0,"message_id":button_id,"application_id":application_id,"session_id":"".join(random.choice(string.ascii_letters + string.digits) for _ in range(32)),"data":{"component_type":2,"custom_id":custom_id}})
+    response = requests.post("https://discord.com/api/v9/interactions", headers=headers, json={
+        "type": 3,
+        "nonce": "".join([str(random.randint(1, 9)) for _ in range(19)]),
+        "guild_id": guild_id,
+        "channel_id": channel_id,
+        "message_flags": 0,
+        "message_id": button_id,
+        "application_id": application_id,
+        "session_id": "".join(random.choice(string.ascii_letters + string.digits) for _ in range(32)),
+        "data": {
+            "component_type": 2,
+            "custom_id": custom_id
+        }
+    })    
+    
     while True:
       response = json.loads(ws.recv())
+
       if response['t'] == 'MESSAGE_CREATE':
         try:
           value = response['d']['embeds'][0]['fields'][0]['value']
@@ -180,9 +234,12 @@ with open("tokens.txt", "r") as f:
             link = response['d']['embeds'][0]['image']['url']
             ws.close()
             break
+          if value == '<:alarm:660789592160600103> **You are verified already!**':
+            print("Verification already completed. Exiting loop.")
+            break
         except:
           continue
-
+    
     print('['+ Fore.GREEN + '+' + Fore.RESET + ']' + 'Captcha obtained correctly')
     print('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'Bypassing captcha...')
         
@@ -199,9 +256,9 @@ with open("tokens.txt", "r") as f:
     print('['+ Fore.GREEN + '+' + Fore.RESET + ']' + f'Captcha bypassed: {captcha}')
     print('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'Bypassing verification...')
     
-    r = requests.post("https://discord.com/api/v9/interactions", headers=headers, json={"type":5,"application_id":application_id,"channel_id":channel_id,"guild_id":guild_id,"data":{"id":id_value,"custom_id":f"modalmmbrver_{token_id}","components":[{"type":1,"components":[{"type":4,"custom_id":"answer","value":captcha}]}]},"session_id":"".join(random.choice(string.ascii_letters + string.digits) for _ in range(32)),"nonce":"".join([str(random.randint(1, 9)) for _ in range(19)])})
+    r = requests.post("https://discord.com/api/v9/interactions", headers=headers, json={"type":5,"application_id":application_id,"channel_id":channel_id,"guild_id":guild_id,"data":{"id":id_value,"custom_id":f"modalmmbrver_{token_id}","components":[{"type":1,"components":[{"type":4,"custom_id":"answer","value":captcha}]}]},"session_id":"".join(random.choice(string.ascii_letters + string.digits) for _ in range(32)),"nonce":"".join([str(random.randint(1, 9)) for _ in range(19)])}).json()
     time.sleep(1)
-    r = requests.get(f'https://discord.com/api/v9/channels/{channel_id}/messages?limit=50', headers=authorization)
+    r = requests.get('https://discord.com/api/v9/channels/{channel_id}/messages?limit=50', headers=authorization)
     if r.status_code == 200:
       failed+=1
       print('['+ Fore.RED + '!' + Fore.RESET + ']' + f'Verification bypass failed with {token[:-5]}.....')

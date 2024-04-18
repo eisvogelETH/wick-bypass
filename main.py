@@ -205,16 +205,24 @@ with open("tokens.txt", "r") as f:
                 "groupIndex": 1
             }
         }
-        user_response = requests.get(json_object["requests"][0]["url"], headers=json_object["authorization"],proxies=proxies).json()
         
-        if json_object["requests"][0]["responseKey"] in user_response:
-            token_id = user_response[json_object["requests"][0]["responseKey"]]
-        else:
-            print('['+ Fore.RED + '!' + Fore.RESET + ']' + f'{token[:-5]}..... is invalid')
-            invalid+=1
-            with open('invalid.txt', 'a') as file:
+        try:
+            user_response = requests.get(json_object["requests"][0]["url"], headers=json_object["authorization"], proxies=proxies).json()
+            if json_object["requests"][0]["responseKey"] in user_response:
+                token_id = user_response[json_object["requests"][0]["responseKey"]]
+            else:
+                print('[' + Fore.RED + '!' + Fore.RESET + ']' + f'{token[:-5]}..... is invalid')
+                invalid += 1
+                with open('invalid.txt', 'a') as file:
+                    file.write(token + '\n')
+                continue
+
+        except Exception as e:
+            failed+=1
+            print('['+ Fore.RED + '!' + Fore.RESET + ']' + f'{token[:-5]}..... failed to connect to API')
+            with open('failed.txt', 'a') as file:
                 file.write(token + '\n')
-            continue
+            continue  
         
         
         message_response = requests.get(json_object["requests"][2]["url"].format(guild_id=guild_id,user_id=token_id), headers=json_object["authorization"], proxies=proxies)

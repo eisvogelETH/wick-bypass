@@ -168,7 +168,7 @@ with open("tokens.txt", "r") as f:
                 continue
             
         # Perform your requests here using the token and proxies
-        System.Title(f"Wick Fucker by over_on_top - {bypassed} verification bypassed - {failed} verification failed - {locked} tokens locked - {invalid} tokens invalid")
+        System.Title(f"Wick bypass by eisvogel.eth - {bypassed} verification bypassed - {failed} verification failed - {locked} tokens locked - {invalid} tokens invalid")
         
         authorization = {
           'Authorization': token
@@ -350,3 +350,4 @@ with open("tokens.txt", "r") as f:
                     file.write(token + '\n')
                 failed+=1
                 print('['+ Fore.RED + '!' + Fore.RESET + ']' + f'Verification bypass failed with {token[:-5]}.....')
+print(f"Wick bypass by eisvogel.eth - {bypassed} verification bypassed - {failed} verification failed - {locked} tokens locked - {invalid} tokens invalid")
